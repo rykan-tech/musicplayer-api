@@ -2,6 +2,28 @@
 # yarn lockfile v1
 
 
+"@types/events@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@types/events/-/events-3.0.0.tgz#2862f3f58a9a7f7c3e78d79f130dd4d71c25c2a7"
+  integrity sha512-EaObqwIvayI5a8dCzhFrjKzVwKLxjoG9T6Ppd5CEo07LRKfQ8Yokw54r5+Wq7FaBQ+yXRvQAYPrHwya1/UFt9g==
+
+events@^3.1.0:
+  version "3.1.0"
+  resolved "https://registry.yarnpkg.com/events/-/events-3.1.0.tgz#84279af1b34cb75aa88bf5ff291f6d0bd9b31a59"
+  integrity sha512-Rv+u8MLHNOdMjTAFeT3nCjHn2aGlx435FP/sDHNaRhDEMwyI/aB22Kj2qIN8R0cw3z28psEQLYwxVKLsKrMgWg==
+
+ste-core@^1.6.12:
+  version "1.6.13"
+  resolved "https://registry.yarnpkg.com/ste-core/-/ste-core-1.6.13.tgz#fae811e7037e082757f31eeb90cbe36b8efb231f"
+  integrity sha512-NkEUqj7AKkgHWKmd7AdXX5+YsPpnmIqN2qpGz0ItyLV5y8kfICTuMVpeWbRVKRpEOK8qSCUuJEWbJ4NtuY+CsA==
+
+ste-simple-events@^1.6.13:
+  version "1.6.13"
+  resolved "https://registry.yarnpkg.com/ste-simple-events/-/ste-simple-events-1.6.13.tgz#2050044979ffd1740c2ce832c607032bd4eb8193"
+  integrity sha512-u3oETBVYLCo3YLNX1VAIjWQirr8TM0AASO2WIOnjyVFgi9XRYI2C/YLLa0kZfsc/8AVOT32oxFe/u0Us8mV5DA==
+  dependencies:
+    ste-core "^1.6.12"
+
 typescript@^3.9.6:
   version "3.9.6"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-3.9.6.tgz#8f3e0198a34c3ae17091b35571d3afd31999365a"

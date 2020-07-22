@@ -6,7 +6,9 @@
  * Full docs: https://github.com/decaffeinate/decaffeinate/blob/master/docs/suggestions.md
  */
 
-const requestAudio = function (path, callback) {
+import { EventEmitter } from "events";
+
+const requestAudio = function (path: string, callback: (audioData: ArrayBuffer) => any) {
 	const request = new XMLHttpRequest;
 	// Async request
 	request.open('GET', path, true);
@@ -23,17 +25,20 @@ class MusicTrack {
 	stopped: boolean;
 	soundStart: number;
 	pauseOffset: number;
+	resumeTime: number;
 	
-	player;
+	player: MusicPlayer;
 	public path: string;
-	onended;
-	onloaded;
+	onended: () => void;
+	onloaded: () => void;
 
-	buffer;
+	/// @ts-ignore
+	buffer: AudioBuffer;
+	
+	/// @ts-ignore
+	source: AudioBufferSourceNode;
 
-	source;
-
-	constructor(player, path, onended, onloaded) {
+	constructor(player: MusicPlayer, path: string, onended: () => void, onloaded: () => void) {
 		this.player = player;
 		this.path = path;
 		this.onended = onended;
@@ -42,8 +47,10 @@ class MusicTrack {
 		this.stopped = true;
 		this.soundStart = 0;
 		this.pauseOffset = 0;
-		requestAudio(this.path, audioData => {
-			return this.player.ctx.decodeAudioData(audioData, decodedData => {
+		this.resumeTime = 0;
+		this.initializeSource();
+		requestAudio(this.path, (audioData) => {
+			return this.player.ctx.decodeAudioData(audioData, (decodedData) => {
 				this.buffer = decodedData;
 				this.onloaded();
 				return this.initializeSource();
@@ -59,12 +66,14 @@ class MusicTrack {
 	}
 
 	play() {
+		// this.resumeTime = Date.now();
 		if (!this.paused && this.stopped) {
 			this.soundStart = Date.now();
 			this.source.onended = this.onended;
 			this.source.start();
 			return this.stopped = false;
 		} else if (this.paused) {
+			this.soundStart = Date.now() - this.pauseOffset;
 			this.paused = false;
 			this.source.onended = this.onended;
 			return this.source.start(0, this.pauseOffset / 1000);
@@ -83,6 +92,7 @@ class MusicTrack {
 
 	pause() {
 		if (!this.paused && !this.stopped) {
+			// milliseconds
 			this.pauseOffset = Date.now() - this.soundStart;
 			this.paused = true;
 			this.source.onended = null;
@@ -94,6 +104,7 @@ class MusicTrack {
 	getDuration() {
 		return this.buffer.duration;
 	}
+	
 
 	getPosition() {
 		if (this.paused) {
@@ -101,14 +112,15 @@ class MusicTrack {
 		} else if (this.stopped) {
 			return 0;
 		} else {
-			return (Date.now() - this.soundStart) / 1000;
+			return (Date.now() - (this.soundStart + 0)) / 1000;
 		}
 	}
 
-	setPosition(position) {
+	/** Manually set the position of playback in the song */
+	setPosition(position: number) {
 		if (position < this.buffer.duration) {
 			if (this.paused) {
-				return this.pauseOffset = position;
+				return this.pauseOffset = position * 1000;
 			} else if (this.stopped) {
 				this.stopped = false;
 				this.soundStart = Date.now() - (position * 1000);
@@ -127,9 +139,10 @@ class MusicTrack {
 	}
 }
 
-class MusicPlayer {
+class MusicPlayer extends EventEmitter {
 	playlist: MusicTrack[];
 	muted: boolean;
+	track: number;
 
 	ctx: AudioContext;
 	gainNode: GainNode;
@@ -139,56 +152,83 @@ class MusicPlayer {
 	// Events //
 	////////////
 
-	onSongFinished(path) {
-		return undefined;
+	onSongFinished(path: string) {
+		if (!(this.playlist.length - 1 > this.track)) this.onPlaylistEnded();
+		this.emit("trackfinished", path);
+		return;
 	}
 
 	onPlaylistEnded() {
-		return undefined;
+		this.emit("playlistended");
+		return;
 	}
 
 	onPlayerStopped() {
-		return undefined;
+		this.emit("stopped");
+		return;
 	}
 
 	onPlayerPaused() {
-		return undefined;
+		this.emit("paused");
+		return;
 	}
 
-	onTrackLoaded(path) {
-		return undefined;
+	onPlayerResumed() {
+		this.emit("play");
+		return;
 	}
 
-	onTrackAdded(path) {
-		return undefined;
+	onTrackLoaded(path: string) {
+		this.emit("trackloaded", path);
+		// dispatchEvent(new CustomEvent<{ path: string }>("trackloaded", { detail: { path: path } }));
+		// return;
+		// this._trackLoaded.dispatch(path);
+		// return this._trackLoaded.asEvent();
 	}
 
-	onTrackRemoved(path) {
-		return undefined;
-	}
+	// onTrackLoaded = new CustomEvent("trackloaded");
 
-	onVolumeChanged(value) {
-		return undefined;
+	onTrackAdded(path: string) {
+		this.emit("trackadded", path);
+		return;
+	}
+	
+	onTrackRemoved(path: string) {
+		this.emit("trackremoved", path);
+		return;
+	}
+	
+	onVolumeChanged(newValue: number) {
+		this.emit("volumechanged", { from: this.previousGain, to: newValue });
+		return;
 	}
 
 	onMuted() {
-		return undefined;
+		this.emit("muted");
+		return;
 	}
-
+	
 	onUnmuted() {
-		return undefined;
+		this.emit("unmuted");
+		return;
 	}
 
 	constructor() {
+		super();
 		this.ctx = new (window.AudioContext);
 		this.gainNode = this.ctx.createGain();
 		this.gainNode.connect(this.ctx.destination);
 		this.previousGain = this.gainNode.gain.value;
 		this.playlist = [];
 		this.muted = false;
+		this.track = 0;
+	}
+	
+	getCurrentTrack() {
+		return this.track;
 	}
 
-	setVolume(value) {
+	setVolume(value: number) {
 		this.gainNode.gain.value = value;
 		return this.onVolumeChanged(value);
 	}
@@ -212,50 +252,84 @@ class MusicPlayer {
 
 	pause() {
 		if (this.playlist.length !== 0) {
-			this.playlist[0].pause();
+			this.playlist[this.track].pause();
 			return this.onPlayerPaused();
 		}
 	}
 
 	stop() {
 		if (this.playlist.length !== 0) {
-			this.playlist[0].stop();
+			this.playlist[this.track].stop();
 			return this.onPlayerStopped();
 		}
 	}
 
 	play() {
 		if (this.playlist.length !== 0) {
-			return this.playlist[0].play();
+			this.playlist[this.track].play();
+			return this.onPlayerResumed();
 		}
 	}
 
 	playNext() {
 		if (this.playlist.length !== 0) {
-			this.playlist[0].stop();
-			this.playlist.shift();
-			if (this.playlist.length === 0) {
-				return this.onPlaylistEnded();
-			} else {
-				return this.playlist[0].play();
-			}
+			this.playlist[this.track].stop();
+			// this.playlist.shift();
+			this.track++;
+			if (this.playlist.length === this.track) {
+				this.track--;
+				return;
+			};
+			this.emit("skipnext", this.track - 1, this.track);
+			return this.playlist[this.track].play();
+			// if (this.playlist.length === 0) {
+			// 	return this.onPlaylistEnded();
+			// } else {
+			// 	// return this.playlist[0].play();
+			// }
+		}
+	}
+	
+	playPrev() {
+		if (this.track > 0 && this.playlist.length !== 0) {
+			this.playlist[this.track].stop();
+			this.track--;
+			this.emit("skipback", this.track + 1, this.track);
+			return this.playlist[this.track].play();
 		}
 	}
 
-	addTrack(path) {
-		const finishedCallback = () => {
-			this.onSongFinished(path);
-			return this.playNext();
-		};
-
-		const loadedCallback = () => {
-			return this.onTrackLoaded(path);
-		};
-
-		return this.playlist.push(new MusicTrack(this, path, finishedCallback, loadedCallback));
+	addTrack(paths: string | string[]) {
+		if (paths instanceof Array) {
+			for (const path of paths) {
+				const finishedCallback = () => {
+					this.onSongFinished(path);
+					// this.track = this.track + 1;
+					return this.playNext();
+				};
+		
+				const loadedCallback = () => {
+					return this.onTrackLoaded(path);
+				};
+		
+				return this.playlist.push(new MusicTrack(this, path, finishedCallback, loadedCallback));
+			}
+		} else {
+			const finishedCallback = () => {
+				this.onSongFinished(paths);
+				// this.track = this.track + 1;
+				return this.playNext();
+			};
+	
+			const loadedCallback = () => {
+				return this.onTrackLoaded(paths);
+			};
+	
+			return this.playlist.push(new MusicTrack(this, paths, finishedCallback, loadedCallback));
+		}
 	}
 
-	insertTrack(index, path) {
+	insertTrack(index: number, path: string) {
 		const finishedCallback = () => {
 			this.onSongFinished(path);
 			return this.playNext();
@@ -269,12 +343,12 @@ class MusicPlayer {
 			new MusicTrack(this, path, finishedCallback, loadedCallback));
 	}
 
-	removeTrack(index) {
+	removeTrack(index: number) {
 		const song = this.playlist.splice(index, 1)[0];
 		return this.onTrackRemoved(song.path);
 	}
 
-	replaceTrack(index, path) {
+	replaceTrack(index: number, path: string) {
 		const finishedCallback = () => {
 			this.onSongFinished(path);
 			return this.playNext();
@@ -289,36 +363,35 @@ class MusicPlayer {
 		return this.onTrackRemoved(oldTrack.path);
 	}
 
-	getSongDuration(index) {
-		if (this.playlist.length === 0) {
+	getSongDuration(index: number) {
+		if (this.playlist.length === this.track) {
 			return 0;
 		} else {
 			if (index != null) {
 				return (this.playlist[index] != null ? this.playlist[index].getDuration() : undefined);
 			} else {
-				return this.playlist[0].getDuration();
+				return this.playlist[this.track].getDuration();
 			}
 		}
 	}
 
 	getSongPosition() {
-		if (this.playlist.length === 0) {
+		if (this.playlist.length === this.track) {
 			return 0;
 		} else {
-			return this.playlist[0].getPosition();
+			return this.playlist[this.track].getPosition();
 		}
 	}
 
-	setSongPosition(value) {
+	setSongPosition(value: number) {
 		if (this.playlist.length !== 0) {
-			return this.playlist[0].setPosition(value);
+			return this.playlist[this.track].setPosition(value);
 		}
 	}
 
 	removeAllTracks() {
-		let playlist;
 		this.stop();
-		return playlist = [];
+		return [];
 	}
 }
 

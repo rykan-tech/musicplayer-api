@@ -20,10 +20,15 @@
   ],
   "author": "Madeline Hart",
   "contributors": [
-	  "Original Author: Francesco Bertolaccini <bertolaccinifrancesco@gmail.com>"
+    "Original Author: Francesco Bertolaccini <bertolaccinifrancesco@gmail.com>"
   ],
   "license": "MIT",
   "devDependencies": {
-	"typescript": "^3.9.6"
+    "@types/events": "^3.0.0",
+    "typescript": "^3.9.6"
+  },
+  "dependencies": {
+    "events": "^3.1.0",
+    "ste-simple-events": "^1.6.13"
   }
 }
