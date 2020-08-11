@@ -20,12 +20,19 @@ const requestAudio = function (path: string, callback: (audioData: ArrayBuffer) 
 	return request.send();
 };
 
+const fetchAudio = async (path: string, callback: (audioData: ArrayBuffer) => any) => {
+	const request = await fetch(path, {
+		method: "GET",
+	});
+	callback(await request.arrayBuffer());
+};
+
 class MusicTrack {
-	paused: boolean;
-	stopped: boolean;
-	soundStart: number;
-	pauseOffset: number;
-	resumeTime: number;
+	paused: boolean = false;
+	stopped: boolean = true;
+	soundStart: number = 0;
+	pauseOffset: number = 0;
+	resumeTime: number = 0;
 	
 	player: MusicPlayer;
 	public path: string;
@@ -43,13 +50,8 @@ class MusicTrack {
 		this.path = path;
 		this.onended = onended;
 		this.onloaded = onloaded;
-		this.paused = false;
-		this.stopped = true;
-		this.soundStart = 0;
-		this.pauseOffset = 0;
-		this.resumeTime = 0;
 		this.initializeSource();
-		requestAudio(this.path, (audioData) => {
+		fetchAudio(this.path, (audioData) => {
 			return this.player.ctx.decodeAudioData(audioData, (decodedData) => {
 				this.buffer = decodedData;
 				this.onloaded();
@@ -228,6 +230,11 @@ class MusicPlayer extends EventEmitter {
 		return this.track;
 	}
 
+	setCurrentTrack = (track: number) => {
+		this.playlist[this.track].stop();
+		this.track = track;
+	}
+
 	setVolume(value: number) {
 		this.gainNode.gain.value = value;
 		return this.onVolumeChanged(value);
@@ -272,8 +279,10 @@ class MusicPlayer extends EventEmitter {
 	}
 
 	playNext() {
+		const isPaused = this.playlist[this.track].paused;
+		const isStopped = this.playlist[this.track].stopped;
 		if (this.playlist.length !== 0) {
-			this.playlist[this.track].stop();
+			if (!isPaused && !isStopped) this.playlist[this.track].stop();
 			// this.playlist.shift();
 			this.track++;
 			if (this.playlist.length === this.track) {
@@ -281,7 +290,11 @@ class MusicPlayer extends EventEmitter {
 				return;
 			};
 			this.emit("skipnext", this.track - 1, this.track);
-			return this.playlist[this.track].play();
+			if (isPaused || isStopped) {
+				// return this.playlist[this.track].pause();
+			} else {
+				return this.playlist[this.track].play();
+			}
 			// if (this.playlist.length === 0) {
 			// 	return this.onPlaylistEnded();
 			// } else {
@@ -291,11 +304,17 @@ class MusicPlayer extends EventEmitter {
 	}
 	
 	playPrev() {
+		const isPaused = this.playlist[this.track].paused;
+		const isStopped = this.playlist[this.track].stopped;
 		if (this.track > 0 && this.playlist.length !== 0) {
-			this.playlist[this.track].stop();
+			if (!isPaused && !isStopped) this.playlist[this.track].stop();
 			this.track--;
 			this.emit("skipback", this.track + 1, this.track);
-			return this.playlist[this.track].play();
+			if (isPaused || isStopped) {
+				// return this.playlist[this.track].pause();
+			} else {
+				return this.playlist[this.track].play();
+			}
 		}
 	}
 
@@ -312,8 +331,9 @@ class MusicPlayer extends EventEmitter {
 					return this.onTrackLoaded(path);
 				};
 		
-				return this.playlist.push(new MusicTrack(this, path, finishedCallback, loadedCallback));
+				this.playlist.push(new MusicTrack(this, path, finishedCallback, loadedCallback));
 			}
+			return;
 		} else {
 			const finishedCallback = () => {
 				this.onSongFinished(paths);
@@ -391,6 +411,7 @@ class MusicPlayer extends EventEmitter {
 
 	removeAllTracks() {
 		this.stop();
+		this.playlist = [];
 		return [];
 	}
 }
